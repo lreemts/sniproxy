@@ -30,4 +30,14 @@
 
 const struct Protocol *tls_protocol;
 
+struct TLSProtocol;
+
+struct TLSProtocol *new_tls_data();
+/**
+ * Returns a new TLSProtocol structure pointer with the specified protocol added
+ * frees the provided TLSProtocol structure
+ */
+struct TLSProtocol *tls_data_append_alpn_protocol(struct TLSProtocol *, const char *, size_t);
+struct TLSProtocol *tls_data_prefer_alpn(struct TLSProtocol *, int);
+
 #endif
