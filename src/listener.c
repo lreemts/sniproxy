@@ -82,6 +82,7 @@ new_listener() {
     listener->address = NULL;
     listener->fallback_address = NULL;
     listener->protocol = tls_protocol;
+    listener->protocol_data = NULL;
     listener->access_log = NULL;
     listener->log_bad_requests = 0;
 
@@ -361,6 +362,7 @@ free_listener(struct Listener *listener) {
 
     free(listener->address);
     free(listener->fallback_address);
+    free(listener->protocol_data);
     free(listener->table_name);
     free_logger(listener->access_log);
     free(listener);
