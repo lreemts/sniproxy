@@ -37,6 +37,7 @@ SLIST_HEAD(Table_head, Table);
 
 struct Table {
     char *name;
+    struct Address *fallback_address;
 
     /* Runtime fields */
     struct Backend_head backends;

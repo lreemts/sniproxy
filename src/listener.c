@@ -80,7 +80,6 @@ new_listener() {
     }
 
     listener->address = NULL;
-    listener->fallback_address = NULL;
     listener->protocol = tls_protocol;
     listener->protocol_data = NULL;
     listener->access_log = NULL;
@@ -143,33 +142,6 @@ accept_listener_protocol(struct Listener *listener, char *protocol) {
 
 int
 accept_listener_fallback_address(struct Listener *listener, char *fallback) {
-    if (listener->fallback_address != NULL) {
-        fprintf(stderr, "Duplicate fallback address: %s\n", fallback);
-        return 0;
-    }
-    listener->fallback_address = new_address(fallback);
-    if (listener->fallback_address == NULL) {
-        fprintf(stderr, "Unable to parse fallback address: %s\n", fallback);
-        return 0;
-    }
-#ifndef HAVE_LIBUDNS
-    if (!address_is_sockaddr(listener->fallback_address)) {
-        fprintf(stderr, "Only fallback socket addresses permitted when compiled without libudns\n");
-        free(listener->fallback_address);
-        listener->fallback_address = NULL;
-        return 0;
-    }
-#endif
-    if (address_is_wildcard(listener->fallback_address)) {
-        free(listener->fallback_address);
-        listener->fallback_address = NULL;
-        /* The wildcard functionality requires successfully parsing the
-         * hostname from the client's request, if we couldn't find the
-         * hostname and are using a fallback address it doesn't make
-         * much sense to configure it as a wildcard. */
-        fprintf(stderr, "Wildcard address prohibited as fallback address\n");
-        return 0;
-    }
 
     return 1;
 }
@@ -243,13 +215,6 @@ init_listener(struct Listener *listener, const struct Table_head *tables) {
     }
     init_table(listener->table);
 
-    /* If no port was specified on the fallback address, inherit the address
-     * from the listening address */
-    if (listener->fallback_address &&
-            address_port(listener->fallback_address) == 0)
-        address_set_port(listener->fallback_address,
-                address_port(listener->address));
-
     sockfd = socket(address_sa(listener->address)->sa_family, SOCK_STREAM, 0);
     if (sockfd < 0) {
         err("socket failed: %s", strerror(errno));
@@ -294,9 +259,6 @@ listener_lookup_server_address(const struct Listener *listener,
         table_lookup_server_address(listener->table, name, name_len);
 
     if (addr == NULL)
-        addr = listener->fallback_address;
-
-    if (addr == NULL)
         return NULL;
 
     int port = address_port(addr);
@@ -306,7 +268,7 @@ listener_lookup_server_address(const struct Listener *listener,
         if (new_addr == NULL) {
             warn("Invalid hostname %.*s", (int)name_len, name);
 
-            return listener->fallback_address;
+            return NULL;
         }
 
         if (port != 0)
@@ -317,7 +279,7 @@ listener_lookup_server_address(const struct Listener *listener,
         if (new_addr == NULL) {
             err("%s: malloc", __func__);
 
-            return listener->fallback_address;
+            return NULL;
         }
 
         memcpy(new_addr, addr, len);
@@ -341,11 +303,6 @@ print_listener_config(FILE *file, const struct Listener *listener) {
     if (listener->table_name)
         fprintf(file, "\ttable %s\n", listener->table_name);
 
-    if (listener->fallback_address)
-        fprintf(file, "\tfallback %s\n",
-                display_address(listener->fallback_address,
-                    address, sizeof(address)));
-
     fprintf(file, "}\n\n");
 }
 
@@ -361,7 +318,6 @@ free_listener(struct Listener *listener) {
         return;
 
     free(listener->address);
-    free(listener->fallback_address);
     free(listener->protocol_data);
     free(listener->table_name);
     free_logger(listener->access_log);

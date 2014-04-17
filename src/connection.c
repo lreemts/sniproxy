@@ -363,10 +363,8 @@ parse_client_request(struct Connection *con) {
                 log_bad_request(con, payload, payload_len, result);
         }
 
-        if (con->listener->fallback_address == NULL) {
-            abort_connection(con);
-            return;
-        }
+        abort_connection(con);
+        return;
     }
 
     con->hostname = hostname;

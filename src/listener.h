@@ -35,7 +35,7 @@ SLIST_HEAD(Listener_head, Listener);
 
 struct Listener {
     /* Configuration fields */
-    struct Address *address, *fallback_address;
+    struct Address *address;
     const struct Protocol *protocol;
     void *protocol_data;
     char *table_name;
