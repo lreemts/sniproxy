@@ -47,6 +47,7 @@
 #include "connection.h"
 #include "resolv.h"
 #include "address.h"
+#include "addressmap.h"
 #include "protocol.h"
 #include "logger.h"
 
@@ -519,7 +520,7 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
         return;
     }
 
-    update_addressmap(con->client.addr, sockfd);
+    update_addressmap(con, sockfd);
     
     struct ev_io *server_watcher = &con->server.watcher;
     ev_io_init(server_watcher, connection_cb, sockfd, EV_WRITE);

@@ -31,3 +31,6 @@
 
 void init_addressmap(struct Config *config);
 void update_addressmap(struct Connection *con, int local_fw_socket);
+
+#endif
+

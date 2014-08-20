@@ -117,7 +117,7 @@ main(int argc, char **argv) {
 
     set_limits(max_nofiles);
 
-    init_addressmap(&config);
+    init_addressmap(config);
 
     init_listeners(&config->listeners, &config->tables, EV_DEFAULT);
 

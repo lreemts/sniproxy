@@ -27,6 +27,10 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <errno.h>
 #include "addressmap.h"
 #include "logger.h"
 
@@ -37,7 +41,10 @@ struct AddressmapEntry {
 
 static struct AddressmapEntry* addressmap = NULL;
 
-static uint8_t ipv4_to_ipv6_prefix = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff };
+static uint8_t ipv4_to_ipv6_prefix[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff };
+static uint8_t ipv4_loopback[] = { 127, 0, 0, 1 };
+static uint8_t ipv6_loopback[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 };
+
 
 #define ADDRESSMAP_SIZE (sizeof( struct AddressmapEntry ) * (1<<16))
 
@@ -53,70 +60,91 @@ void init_addressmap(struct Config *config)
         
         if( key < 0 )
         {
-            err( "Error getting addressmap key for file %s: %s", config->addressmap_shm, strerror() );
+            err( "Error getting addressmap key for file %s: %s", config->addressmap_shm, strerror(errno) );
             return;
         }
         shmid = shmget(key, ADDRESSMAP_SIZE, 0644 | IPC_CREAT);
         if( shmid < 0 )
         {
-            err( "Error getting shm id for file %s: %s", config->addressmap_shm, strerror() );
+            err( "Error getting shm id for file %s: %s", config->addressmap_shm, strerror(errno) );
             return;
         }
         
         shmaddr = shmat( shmid, NULL, 0 );
         
-        if( shmaddr == ((void *) -1)
+        if( (shmaddr == NULL) || (shmaddr == ((void *) -1)) )
         {
-            err( "Error mapping shared memory for file %s: %s", config->addressmap_shm, strerror() );
+            err( "Error mapping shared memory for file %s: %s", config->addressmap_shm, strerror(errno) );
             return;
         }
         
         addressmap = (struct AddressmapEntry*) shmaddr;
+        
+        info( "Opened mapping shared memory for file %s", config->addressmap_shm );
+    }else{
+        info( "No mapping shared memory file defined" );
     }
 }
 
 void update_addressmap(struct Connection *con, int local_fw_socket)
 {
+    char buffer[256];
+    
+    info( "update_addressmap( %s, %d )", display_sockaddr( &con->client.addr, buffer, sizeof( buffer ) ), local_fw_socket );
+    
+    if( addressmap == NULL )
+    {
+        return;
+    }
+    
     struct sockaddr_storage local_address;
     socklen_t local_address_len = sizeof(local_address);
 
-    if( getsockname( local_fw_socket, &local_address, &local_address_len ) < 0 )
+    if( getsockname( local_fw_socket, (struct sockaddr *)&local_address, &local_address_len ) < 0 )
     {
         warn( "Getting local address for forwarded connection: %s", strerror( errno ) );
         return;
     }
 
-    AddressmapEntry* entry = NULL;
+    info( "local address: %s", display_sockaddr( &local_address, buffer, sizeof( buffer ) ), local_fw_socket );
     
-    switch (((struct sockaddr *)local_address)->sa_family) {
+    uint16_t local_port = 0;
+    
+    switch (((struct sockaddr *)&local_address)->sa_family) {
         case AF_INET:
-            if( memcmp( ((struct sockaddr_in *)local_address)->sin_addr, ipv4_loopback, 4 ) == 0 )
+            if( memcmp( &((struct sockaddr_in *)&local_address)->sin_addr, ipv4_loopback, 4 ) == 0 )
             {
-                entry = &addressmap[((struct sockaddr_in *)local_address)->sin_port];
+                local_port = ntohs(((struct sockaddr_in *)&local_address)->sin_port);
             }
             break;
         case AF_INET6:
-            if( memcmp( ((struct sockaddr_in6 *)local_address)->sin6_addr, ipv6_loopback, 16 ) == 0 )
+            if( memcmp( &((struct sockaddr_in6 *)&local_address)->sin6_addr, ipv6_loopback, 16 ) == 0 )
             {
-                entry = &addressmap[((struct sockaddr_in6 *)local_address)->sin6_port];
+                local_port = ntohs(((struct sockaddr_in6 *)&local_address)->sin6_port);
             }
+            break;
+        default:
+            info( "Unsupported address family %s", display_sockaddr( &con->client.addr, buffer, sizeof( buffer ) ) );
             break;
     }
     
-    if( entry )
+    if( local_port )
     {
-        const struct sockaddr * client_address = (const struct sockaddr *) con->client.addr;
+        const struct sockaddr * client_address = (const struct sockaddr *) &con->client.addr;
+        struct AddressmapEntry* entry = &addressmap[local_port];
     
         switch (client_address->sa_family) {
             case AF_INET:
-                memcpy( entry->address, ipv4_to_ipv6_prefix, 10 );
-                memcpy( entry->address + 10, ((struct sockaddr_in *)client_address)->sin_addr, 4 );
+                memcpy( entry->address, ipv4_to_ipv6_prefix, 12 );
+                memcpy( entry->address + 12, &((struct sockaddr_in *)client_address)->sin_addr, 4 );
                 entry->port = ((struct sockaddr_in *)client_address)->sin_port;
                 break;
             case AF_INET6:
-                memcpy( entry->address, ((struct sockaddr_in6 *)client_address)->sin6_addr, sizeof(entry->address) );
-                entry->port = ((struct sockaddr_in *)client_address)->sin6_port;
+                memcpy( entry->address, &((struct sockaddr_in6 *)client_address)->sin6_addr, sizeof(entry->address) );
+                entry->port = ((struct sockaddr_in6 *)client_address)->sin6_port;
                 break;
         }
+        char buffer[256];
+        info( "Added address map entry %d: %s", local_port, display_sockaddr( client_address, buffer, sizeof( buffer ) ) );
     }
 }
