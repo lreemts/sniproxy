@@ -44,6 +44,7 @@
 #include "listener.h"
 #include "resolv.h"
 #include "logger.h"
+#include "addressmap.h"
 
 
 static void usage();
@@ -115,6 +116,8 @@ main(int argc, char **argv) {
     start_binder();
 
     set_limits(max_nofiles);
+
+    init_addressmap(&config);
 
     init_listeners(&config->listeners, &config->tables, EV_DEFAULT);
 

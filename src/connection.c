@@ -519,6 +519,8 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
         return;
     }
 
+    update_addressmap(con->client.addr, sockfd);
+    
     struct ev_io *server_watcher = &con->server.watcher;
     ev_io_init(server_watcher, connection_cb, sockfd, EV_WRITE);
     con->server.watcher.data = con;

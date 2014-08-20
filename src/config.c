@@ -39,6 +39,7 @@ struct LoggerBuilder {
 
 static int accept_username(struct Config *, char *);
 static int accept_pidfile(struct Config *, char *);
+static int accept_addressmap_shm(struct Config *, char *);
 static int end_listener_stanza(struct Config *, struct Listener *);
 static int end_table_stanza(struct Config *, struct Table *);
 static int end_backend(struct Table *, struct Backend *);
@@ -123,6 +124,11 @@ static struct Keyword global_grammar[] = {
             (int(*)(void *, char *))accept_pidfile,
             NULL,
             NULL},
+    { "addressmap_shm",
+            NULL,
+            (int(*)(void *, char *))accept_addressmap_shm,
+            NULL,
+            NULL},
     { "error_log",
             (void *(*)())new_logger_builder,
             NULL,
@@ -160,6 +166,7 @@ init_config(const char *filename) {
     config->filename = NULL;
     config->user = NULL;
     config->pidfile = NULL;
+    config->addressmap_shm = NULL;
     config->access_log = NULL;
     SLIST_INIT(&config->listeners);
     SLIST_INIT(&config->tables);
@@ -270,6 +277,17 @@ static int
 accept_pidfile(struct Config *config, char *pidfile) {
     config->pidfile = strdup(pidfile);
     if (config->pidfile == NULL) {
+        err("%s: strdup", __func__);
+        return -1;
+    }
+
+    return 1;
+}
+
+static int
+accept_addressmap_shm(struct Config *config, char *addressmap_shm) {
+    config->addressmap_shm = strdup(addressmap_shm);
+    if (config->addressmap_shm == NULL) {
         err("%s: strdup", __func__);
         return -1;
     }

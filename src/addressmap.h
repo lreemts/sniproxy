@@ -23,26 +23,11 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef CONFIG_H
-#define CONFIG_H
+#ifndef ADDRESSMAP_H
+#define ADDRESSMAP_H
 
-#include <stdio.h>
-#include "table.h"
-#include "listener.h"
+#include "config.h"
+#include "connection.h"
 
-struct Config {
-    char *filename;
-    char *user;
-    char *pidfile;
-    char *addressmap_shm;
-    struct Logger *access_log;
-    struct Listener_head listeners;
-    struct Table_head tables;
-};
-
-struct Config *init_config(const char *);
-void reload_config(struct Config *, struct ev_loop *);
-void free_config(struct Config *);
-void print_config(FILE *, struct Config *);
-
-#endif
+void init_addressmap(struct Config *config);
+void update_addressmap(struct Connection *con, int local_fw_socket);
