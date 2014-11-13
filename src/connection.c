@@ -39,6 +39,7 @@
 #include <arpa/inet.h>
 #include <ev.h>
 #include <assert.h>
+#include <netinet/tcp.h>
 
 #ifdef HAVE_ALLOCA_H
 #include <alloca.h>
@@ -521,6 +522,19 @@ initiate_server_connect(struct Connection *con, struct ev_loop *loop) {
     }
 
     update_addressmap(con, sockfd);
+    
+    int enabled = 1;
+    if( (setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (char*)(&enabled),sizeof(enabled))) != 0)
+    {
+      char server[INET6_ADDRSTRLEN + 8];
+      warn( "Setting TCP_NODELAY option failed on server socket%s", display_sockaddr(&con->server.addr, server, sizeof(server)));
+    }
+
+    if( (setsockopt(con->client.watcher.fd, IPPROTO_TCP, TCP_NODELAY, (char*)(&enabled),sizeof(enabled))) != 0)
+    {
+      char server[INET6_ADDRSTRLEN + 8];
+      warn( "Setting TCP_NODELAY option failed on client socket %s", display_sockaddr(&con->server.addr, server, sizeof(server)));
+    }
     
     struct ev_io *server_watcher = &con->server.watcher;
     ev_io_init(server_watcher, connection_cb, sockfd, EV_WRITE);
